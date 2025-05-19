@@ -1,10 +1,11 @@
 <?php
 session_start();
+require '../includes/db_connect.php';
+
 if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'jobseeker') {
     header("Location: ../login.php");
     exit();
 }
-require '../includes/db_connect.php';
 ?>
 
 <!DOCTYPE html>
@@ -22,18 +23,19 @@ require '../includes/db_connect.php';
     </script>
 </head>
 <body class="bg-light">
-<div class="container mt-4">
+
+<div class="container-fluid mt-4">
     <div class="row">
 
-        <!-- SOL PANEL: Filtre -->
+        <!-- Sol Panel: Sıralama -->
         <div class="col-md-3">
             <form method="GET" class="border rounded p-3 bg-white shadow-sm">
                 <h5>Sort Options</h5>
                 <div class="mb-3">
                     <label for="sort" class="form-label">Sort by:</label>
-                    <select name="sort" id="sort" class="form-select">
-                        <option value="">Latest</option>
-                        <option value="popularity" <?= (isset($_GET['sort']) && $_GET['sort'] === 'popularity') ? 'selected' : '' ?>>Popularity</option>
+                    <select class="form-select" name="sort" id="sort">
+                        <option value="latest" <?= (!isset($_GET['sort']) || $_GET['sort'] == 'latest') ? 'selected' : '' ?>>Latest</option>
+                        <option value="popularity" <?= (isset($_GET['sort']) && $_GET['sort'] == 'popularity') ? 'selected' : '' ?>>Popularity</option>
                     </select>
                 </div>
                 <div class="d-grid">
@@ -42,35 +44,46 @@ require '../includes/db_connect.php';
             </form>
         </div>
 
-        <!-- SAĞ PANEL: İş İlanları -->
+        <!-- Sağ Panel: İş İlanları -->
         <div class="col-md-9">
             <h4 class="mb-3">Job Listings</h4>
 
+            <!-- Başvuru mesajı -->
+            <?php if (isset($_SESSION['apply_feedback'])): ?>
+                <div class="alert alert-<?= $_SESSION['apply_feedback']['type'] ?> alert-dismissible fade show" role="alert">
+                    <?= $_SESSION['apply_feedback']['message'] ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                <?php unset($_SESSION['apply_feedback']); ?>
+            <?php endif; ?>
+
             <?php
-            if (isset($_GET['sort']) && $_GET['sort'] === 'popularity') {
+            $sort = $_GET['sort'] ?? 'latest';
+
+            // Sıralama türü
+            if ($sort == 'popularity') {
                 $query = "
-                    SELECT j.*, c.LogoURL, COUNT(a.AID) AS ApplicationCount
+                    SELECT j.*, c.LogoURL, COUNT(a.AID) AS app_count 
                     FROM Job j
                     JOIN Company c ON j.UID = c.UID
                     LEFT JOIN Application a ON j.JID = a.JID
                     GROUP BY j.JID
-                    ORDER BY ApplicationCount DESC
+                    ORDER BY app_count DESC, PostDate DESC
                 ";
             } else {
                 $query = "
-                    SELECT j.*, c.LogoURL, COUNT(a.AID) AS ApplicationCount
+                    SELECT j.*, c.LogoURL, 
+                    (SELECT COUNT(*) FROM Application a WHERE a.JID = j.JID) AS app_count 
                     FROM Job j
                     JOIN Company c ON j.UID = c.UID
-                    LEFT JOIN Application a ON j.JID = a.JID
-                    GROUP BY j.JID
-                    ORDER BY j.PostDate DESC
+                    ORDER BY PostDate DESC
                 ";
             }
 
             $result = $conn->query($query);
             ?>
 
-            <?php if ($result && $result->num_rows > 0): ?>
+            <?php if ($result->num_rows > 0): ?>
                 <?php while ($row = $result->fetch_assoc()): ?>
                     <div class="card mb-3 shadow-sm">
                         <div class="row g-0">
@@ -84,9 +97,7 @@ require '../includes/db_connect.php';
                                         <strong><?= htmlspecialchars($row['JobType']) ?></strong> • <?= htmlspecialchars($row['JLocation']) ?>
                                     </p>
                                     <p class="card-text">
-                                        <small class="text-muted">
-                                            Posted on: <?= date('Y-m-d', strtotime($row['PostDate'])) ?> • <?= $row['ApplicationCount'] ?> Applications
-                                        </small>
+                                        <small class="text-muted">Posted on: <?= date("Y-m-d", strtotime($row['PostDate'])) ?> • <?= $row['app_count'] ?> Applications</small>
                                     </p>
                                     <button onclick="confirmApply('../Apply/apply_job.php?jid=<?= $row['JID'] ?>')" class="btn btn-success btn-sm float-end">Apply</button>
                                 </div>

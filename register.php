@@ -1,35 +1,41 @@
 <?php
+session_start();
 require 'includes/db_connect.php';
 
-$success = $error = "";
+$success = '';
+$error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $fname = $_POST['fname'];
-    $lname = $_POST['lname'];
-    $email = $_POST['email'];
+    $fname = trim($_POST['fname']);
+    $lname = trim($_POST['lname']);
+    $email = trim($_POST['email']);
     $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
     $role = $_POST['role'];
 
-    // Insert into User table
-    $stmt = $conn->prepare("INSERT INTO User (FName, LName, Email, Password) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param("ssss", $fname, $lname, $email, $password);
-
-    if ($stmt->execute()) {
-        $uid = $stmt->insert_id;
-
-        if ($role === 'jobseeker') {
-            $conn->query("INSERT INTO JobSeeker (UID) VALUES ($uid)");
-        } elseif ($role === 'company') {
-            $conn->query("INSERT INTO Company (UID, Location) VALUES ($uid, 'Default Location')");
-        }
-
-        $success = "Registration successful! <a href='login.php'>Click here to login</a>.";
+    // Sadece 'jobseeker' veya 'company' rollerine izin ver
+    if (!in_array($role, ['jobseeker', 'company'])) {
+        $error = "Invalid role selected.";
     } else {
-        $error = "Error: " . $conn->error;
-    }
+        // Email kontrolü
+        $stmt = $conn->prepare("SELECT * FROM User WHERE Email = ?");
+        $stmt->bind_param("s", $email);
+        $stmt->execute();
+        $result = $stmt->get_result();
 
-    $stmt->close();
-    $conn->close();
+        if ($result->num_rows > 0) {
+            $error = "This email is already registered.";
+        } else {
+            // Kullanıcıyı kaydet
+            $stmt = $conn->prepare("INSERT INTO User (FName, LName, Email, Password, Role) VALUES (?, ?, ?, ?, ?)");
+            $stmt->bind_param("sssss", $fname, $lname, $email, $password, $role);
+
+            if ($stmt->execute()) {
+                $success = "Registration successful! You can now log in.";
+            } else {
+                $error = "An error occurred during registration.";
+            }
+        }
+    }
 }
 ?>
 
@@ -41,60 +47,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light">
-
 <div class="container mt-5">
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card shadow">
-                <div class="card-body">
-                    <h3 class="text-center mb-4">User Registration</h3>
+    <div class="mx-auto p-4 bg-white shadow rounded" style="max-width: 500px;">
+        <h3 class="mb-4 text-center">User Registration</h3>
 
-                    <?php if ($success): ?>
-                        <div class="alert alert-success"><?= $success ?></div>
-                    <?php elseif ($error): ?>
-                        <div class="alert alert-danger"><?= $error ?></div>
-                    <?php endif; ?>
+        <?php if ($success): ?>
+            <div class="alert alert-success"><?= $success ?></div>
+        <?php elseif ($error): ?>
+            <div class="alert alert-danger"><?= $error ?></div>
+        <?php endif; ?>
 
-                    <form method="POST" action="register.php">
-                        <div class="mb-3">
-                            <label class="form-label">First Name</label>
-                            <input type="text" name="fname" class="form-control" required>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Last Name</label>
-                            <input type="text" name="lname" class="form-control" required>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Email</label>
-                            <input type="email" name="email" class="form-control" required>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Password</label>
-                            <input type="password" name="password" class="form-control" required>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">User Role</label>
-                            <select name="role" class="form-select" required>
-                                <option value="jobseeker">Job Seeker</option>
-                                <option value="company">Company</option>
-                            </select>
-                        </div>
-
-                        <div class="d-grid">
-                            <button type="submit" class="btn btn-primary">Register</button>
-                        </div>
-                    </form>
-
-                    <p class="text-center mt-3">Already have an account? <a href="login.php">Login here</a>.</p>
-                </div>
+        <form method="POST">
+            <div class="mb-3">
+                <label for="fname" class="form-label">First Name</label>
+                <input type="text" name="fname" class="form-control" required>
             </div>
+            <div class="mb-3">
+                <label for="lname" class="form-label">Last Name</label>
+                <input type="text" name="lname" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label for="email" class="form-label">Email address</label>
+                <input type="email" name="email" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label for="password" class="form-label">Password</label>
+                <input type="password" name="password" class="form-control" required>
+            </div>
+            <div class="mb-4">
+                <label for="role" class="form-label">User Role</label>
+                <select name="role" class="form-select" required>
+                    <option value="jobseeker">Job Seeker</option>
+                    <option value="company">Company</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Register</button>
+        </form>
+
+        <div class="mt-3 text-center">
+            Already have an account? <a href="login.php">Login here.</a>
         </div>
     </div>
 </div>
-
 </body>
 </html>

@@ -9,10 +9,10 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'jobseeker') {
 
 if (isset($_GET['jid'])) {
     $jobId = intval($_GET['jid']);
-    $userId = $_SESSION['user_id'];  // 🔧 DÜZELTİLEN YER
+    $userId = $_SESSION['user_id'];
     $applyDate = date('Y-m-d');
 
-    // Zaten başvurmuş mu?
+    // Daha önce başvuru yapılmış mı kontrolü
     $checkQuery = "SELECT * FROM Application WHERE UID = ? AND JID = ?";
     $stmt = $conn->prepare($checkQuery);
     $stmt->bind_param("ii", $userId, $jobId);
@@ -20,24 +20,27 @@ if (isset($_GET['jid'])) {
     $result = $stmt->get_result();
 
     if ($result->num_rows > 0) {
-        header("Location: ../Jobseeker/view_jobs.php?status=already_applied");
+        $_SESSION['apply_feedback'] = ['type' => 'warning', 'message' => 'You have already applied to this job.'];
+        header("Location: ../Jobseeker/view_jobs.php");
         exit();
     }
 
-    // Başvuruyu kaydet
+    // Yeni başvuru ekle
     $insertQuery = "INSERT INTO Application (UID, JID, ApplyDate) VALUES (?, ?, ?)";
     $stmt = $conn->prepare($insertQuery);
     $stmt->bind_param("iis", $userId, $jobId, $applyDate);
 
     if ($stmt->execute()) {
-        header("Location: ../Jobseeker/view_jobs.php?status=success");
-        exit();
+        $_SESSION['apply_feedback'] = ['type' => 'success', 'message' => 'Application submitted successfully!'];
     } else {
-        header("Location: ../Jobseeker/view_jobs.php?status=error");
-        exit();
+        $_SESSION['apply_feedback'] = ['type' => 'danger', 'message' => 'Failed to apply. Please try again.'];
     }
+
+    header("Location: ../Jobseeker/view_jobs.php");
+    exit();
 } else {
-    header("Location: ../Jobseeker/view_jobs.php?status=invalid");
+    $_SESSION['apply_feedback'] = ['type' => 'danger', 'message' => 'Invalid job selection.'];
+    header("Location: ../Jobseeker/view_jobs.php");
     exit();
 }
 ?>

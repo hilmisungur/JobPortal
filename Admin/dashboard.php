@@ -8,14 +8,32 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'admin') {
 require '../includes/db_connect.php';
 
 $currentAdminId = $_SESSION['user_id'];
+$search = isset($_GET['search']) ? $conn->real_escape_string($_GET['search']) : '';
+$roleFilter = isset($_GET['role']) ? $conn->real_escape_string($_GET['role']) : 'all';
 
-// Kullanıcı sayısı
+// Admin rolünü dropdown'dan kaldırdık (gösterilmeyecek)
+$roles = [
+    'jobseeker' => 'Job Seeker',
+    'company' => 'Company'
+];
+
+$whereConditions = ["UID != $currentAdminId"]; // Admin kendini görmesin
+
+if (!empty($search)) {
+    $whereConditions[] = "(FName LIKE '%$search%' OR LName LIKE '%$search%')";
+}
+
+if ($roleFilter !== 'all' && isset($roles[$roleFilter])) {
+    $whereConditions[] = "Role = '$roleFilter'";
+}
+
+$whereClause = implode(' AND ', $whereConditions);
+$query = "SELECT UID, FName, LName, Email, Role FROM User WHERE $whereClause";
+$users = $conn->query($query);
+
 $userCount = $conn->query("SELECT COUNT(*) AS total FROM User WHERE UID != $currentAdminId")->fetch_assoc()['total'];
 $jobCount = $conn->query("SELECT COUNT(*) AS total FROM Job")->fetch_assoc()['total'];
 $appCount = $conn->query("SELECT COUNT(*) AS total FROM Application")->fetch_assoc()['total'];
-
-// Kullanıcı listesi (admin hariç)
-$users = $conn->query("SELECT UID, FName, LName, Email FROM User WHERE UID != $currentAdminId");
 ?>
 
 <!DOCTYPE html>
@@ -35,14 +53,6 @@ $users = $conn->query("SELECT UID, FName, LName, Email FROM User WHERE UID != $c
         <a href="applications.php" class="btn btn-outline-primary me-2">📥 All Applications</a>
         <a href="../logout.php" class="btn btn-outline-danger">🚪 Logout</a>
     </nav>
-
-    <?php if (isset($_SESSION['success_message'])): ?>
-        <div class="alert alert-success text-center"><?= $_SESSION['success_message']; unset($_SESSION['success_message']); ?></div>
-    <?php endif; ?>
-
-    <?php if (isset($_SESSION['error_message'])): ?>
-        <div class="alert alert-danger text-center"><?= $_SESSION['error_message']; unset($_SESSION['error_message']); ?></div>
-    <?php endif; ?>
 
     <div class="row text-center mb-4">
         <div class="col-md-4">
@@ -72,21 +82,41 @@ $users = $conn->query("SELECT UID, FName, LName, Email FROM User WHERE UID != $c
     </div>
 
     <h3>Registered Users</h3>
+
+    <form class="row g-3 mb-3" method="GET" action="">
+        <div class="col-md-6">
+            <input type="text" name="search" class="form-control" placeholder="Search by name..." value="<?= htmlspecialchars($search) ?>">
+        </div>
+        <div class="col-md-3">
+            <select name="role" class="form-select">
+                <option value="all" <?= $roleFilter === 'all' ? 'selected' : '' ?>>All Roles</option>
+                <?php foreach ($roles as $key => $label): ?>
+                    <option value="<?= $key ?>" <?= $roleFilter === $key ? 'selected' : '' ?>><?= $label ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <button type="submit" class="btn btn-primary w-100">Filter</button>
+        </div>
+    </form>
+
     <table class="table table-bordered table-striped">
         <thead class="table-dark">
             <tr>
                 <th>ID</th>
                 <th>Full Name</th>
                 <th>Email</th>
+                <th>Role</th>
                 <th>Delete</th>
             </tr>
         </thead>
         <tbody>
-        <?php while($row = $users->fetch_assoc()): ?>
+        <?php while ($row = $users->fetch_assoc()): ?>
             <tr>
                 <td><?= $row['UID'] ?></td>
                 <td><?= htmlspecialchars($row['FName'] . ' ' . $row['LName']) ?></td>
                 <td><?= htmlspecialchars($row['Email']) ?></td>
+                <td><?= $roles[$row['Role']] ?? 'Unknown' ?></td>
                 <td>
                     <form method="POST" action="delete_user.php" onsubmit="return confirm('Are you sure you want to delete this user?');" class="d-inline">
                         <input type="hidden" name="uid" value="<?= $row['UID'] ?>">

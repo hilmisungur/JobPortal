@@ -1,56 +1,42 @@
 <?php
 session_start();
+require 'includes/db_connect.php';
+
+$error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    require 'includes/db_connect.php';
+    $email = trim($_POST['email']);
+    $password = trim($_POST['password']);
 
-    $email = $_POST['email'];
-    $password = $_POST['password'];
-
-    // Prepared statement ile güvenli sorgu
-    $stmt = $conn->prepare("SELECT * FROM User WHERE Email = ?");
+    $stmt = $conn->prepare("SELECT UID, FName, LName, Password, Role FROM User WHERE Email = ?");
     $stmt->bind_param("s", $email);
     $stmt->execute();
     $result = $stmt->get_result();
 
-    if ($result->num_rows === 1) {
-        $row = $result->fetch_assoc();
+    if ($user = $result->fetch_assoc()) {
+        if (password_verify($password, $user['Password'])) {
+            // Başarılı giriş
+            $_SESSION['user_id'] = $user['UID'];
+            $_SESSION['user_name'] = $user['FName'] . ' ' . $user['LName'];
+            $_SESSION['user_role'] = $user['Role'];
 
-        if (password_verify($password, $row['Password'])) {
-            session_regenerate_id(true);
-            $_SESSION['user_id'] = $row['UID'];
-            $_SESSION['user_name'] = $row['FName'] . ' ' . $row['LName'];
-
-            // Rol belirleme
-            $uid = $row['UID'];
-            $role = "admin";
-
-            $roleCheck = $conn->prepare("SELECT UID FROM JobSeeker WHERE UID = ?");
-            $roleCheck->bind_param("i", $uid);
-            $roleCheck->execute();
-            if ($roleCheck->get_result()->num_rows > 0) {
-                $role = "jobseeker";
+            // Role bazlı yönlendirme
+            if ($user['Role'] === 'admin') {
+                header("Location: Admin/dashboard.php");
+            } elseif ($user['Role'] === 'company') {
+                header("Location: Dashboard/company.php");
+            } elseif ($user['Role'] === 'jobseeker') {
+                header("Location: Dashboard/jobseeker.php");
             } else {
-                $roleCheck = $conn->prepare("SELECT UID FROM Company WHERE UID = ?");
-                $roleCheck->bind_param("i", $uid);
-                $roleCheck->execute();
-                if ($roleCheck->get_result()->num_rows > 0) {
-                    $role = "company";
-                }
+                $error = "Unrecognized user role.";
             }
-
-            $_SESSION['user_role'] = $role;
-
-            header("Location: Dashboard/{$role}.php");
             exit();
         } else {
-            $error = "Incorrect password.";
+            $error = "Invalid email or password.";
         }
     } else {
         $error = "User not found.";
     }
-    $stmt->close();
-    $conn->close();
 }
 ?>
 
@@ -64,35 +50,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body class="bg-light">
 
 <div class="container mt-5">
-    <div class="row justify-content-center">
-        <div class="col-md-5">
-            <div class="card shadow">
-                <div class="card-body">
-                    <h3 class="text-center mb-4">User Login</h3>
+    <div class="mx-auto p-4 bg-white shadow rounded" style="max-width: 400px;">
+        <h3 class="mb-4 text-center">Login</h3>
 
-                    <?php if (isset($error)): ?>
-                        <div class="alert alert-danger text-center"><?= htmlspecialchars($error) ?></div>
-                    <?php endif; ?>
+        <?php if ($error): ?>
+            <div class="alert alert-danger"><?= $error ?></div>
+        <?php endif; ?>
 
-                    <form method="POST" action="login.php">
-                        <div class="mb-3">
-                            <label class="form-label">Email address</label>
-                            <input type="email" name="email" class="form-control" required>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Password</label>
-                            <input type="password" name="password" class="form-control" required>
-                        </div>
-
-                        <div class="d-grid">
-                            <button type="submit" class="btn btn-primary">Login</button>
-                        </div>
-                    </form>
-
-                    <p class="text-center mt-3 mb-0">Don't have an account? <a href="register.php">Register here</a></p>
-                </div>
+        <form method="POST">
+            <div class="mb-3">
+                <label for="email" class="form-label">Email address</label>
+                <input type="email" name="email" class="form-control" required>
             </div>
+            <div class="mb-4">
+                <label for="password" class="form-label">Password</label>
+                <input type="password" name="password" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Login</button>
+        </form>
+
+        <div class="mt-3 text-center">
+            Don't have an account? <a href="register.php">Register here</a>
         </div>
     </div>
 </div>
