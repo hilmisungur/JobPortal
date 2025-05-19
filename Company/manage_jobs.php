@@ -25,7 +25,11 @@ $result = $jobs->get_result();
 <div class="container mt-5">
     <h2 class="mb-4 text-center">My Posted Jobs</h2>
 
+    <!-- Buton grubu: Home Page - Add New Job - Logout -->
     <div class="mb-3 text-center">
+        <a href="../Dashboard/company.php" class="btn btn-outline-primary me-2">
+            <span class="me-1">🏠</span> Home Page
+        </a>
         <a href="add_job.php" class="btn btn-primary me-2">➕ Add New Job</a>
         <a href="../logout.php" class="btn btn-outline-danger">Logout</a>
     </div>

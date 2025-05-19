@@ -25,6 +25,14 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'jobseeker') {
 <body class="bg-light">
 
 <div class="container-fluid mt-4">
+
+    <!-- Sağ üst Home butonu -->
+    <div class="d-flex justify-content-end mb-3">
+        <a href="../Dashboard/jobseeker.php" class="btn btn-outline-primary">
+            <span class="me-1">🏠</span> Home
+        </a>
+    </div>
+
     <div class="row">
 
         <!-- Sol Panel: Sıralama -->
