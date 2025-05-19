@@ -10,7 +10,6 @@ require '../includes/db_connect.php';
 $companyID = $_SESSION['user_id'];
 $jobTitleFilter = isset($_GET['jobtitle']) ? trim($_GET['jobtitle']) : '';
 
-// Filtreli sorgu
 $sql = "
     SELECT a.ApplyDate, u.FName, u.LName, u.Email, j.Title AS JobTitle
     FROM Application a
@@ -18,18 +17,23 @@ $sql = "
     JOIN User u ON a.UID = u.UID
     WHERE j.UID = ?
 ";
-if ($jobTitleFilter !== '') {
-    $sql .= " AND j.Title LIKE ?";
-}
-$sql .= " ORDER BY a.ApplyDate DESC";
+$params = [];
+$types = "i";
+$params[] = $companyID;
 
+if ($jobTitleFilter !== '' && mb_strlen($jobTitleFilter, 'UTF-8') >= 3) {
+    $sql .= " AND j.Title COLLATE utf8mb4_general_ci LIKE ?";
+    $types .= "s";
+    $params[] = '%' . $jobTitleFilter . '%';
+}
+
+$sql .= " ORDER BY a.ApplyDate DESC";
 $stmt = $conn->prepare($sql);
 
-if ($jobTitleFilter !== '') {
-    $likeTitle = '%' . $jobTitleFilter . '%';
-    $stmt->bind_param("is", $companyID, $likeTitle);
+if (count($params) == 2) {
+    $stmt->bind_param($types, $params[0], $params[1]);
 } else {
-    $stmt->bind_param("i", $companyID);
+    $stmt->bind_param($types, $params[0]);
 }
 $stmt->execute();
 $result = $stmt->get_result();
@@ -46,15 +50,13 @@ $result = $stmt->get_result();
 
 <div class="container mt-5">
     <h2 class="mb-4 text-center">Applications to Your Job Postings</h2>
-
     <div class="mb-3 text-center">
-        <a href="manage_jobs.php" class="btn btn-outline-secondary">← Back to Job Management</a>
+        <a href="../dashboard/company.php" class="btn btn-outline-secondary">&larr; Go Back</a>
     </div>
 
-    <!-- Job Title Arama/Filtre Formu -->
     <form method="get" class="row mb-4 justify-content-center">
         <div class="col-md-4">
-            <input type="text" name="jobtitle" class="form-control" placeholder="Search by Job Title..." value="<?= htmlspecialchars($jobTitleFilter) ?>">
+            <input type="text" name="jobtitle" class="form-control" placeholder="Search by Job Title (min. 3 chars)..." value="<?= htmlspecialchars($jobTitleFilter) ?>">
         </div>
         <div class="col-md-2">
             <button type="submit" class="btn btn-primary w-100">Filter</button>
@@ -65,6 +67,10 @@ $result = $stmt->get_result();
             </div>
         <?php endif; ?>
     </form>
+
+    <?php if ($jobTitleFilter !== '' && mb_strlen($jobTitleFilter, 'UTF-8') < 3): ?>
+        <div class="alert alert-warning text-center mb-4">Please enter at least 3 characters to search.</div>
+    <?php endif; ?>
 
     <?php if ($result->num_rows > 0): ?>
         <table class="table table-bordered table-striped">
@@ -87,7 +93,7 @@ $result = $stmt->get_result();
             <?php endwhile; ?>
             </tbody>
         </table>
-    <?php else: ?>
+    <?php elseif ($jobTitleFilter !== '' && mb_strlen($jobTitleFilter, 'UTF-8') >= 3): ?>
         <div class="alert alert-info text-center">No applications found<?= $jobTitleFilter ? " for job title \"$jobTitleFilter\"" : "" ?>.</div>
     <?php endif; ?>
 </div>

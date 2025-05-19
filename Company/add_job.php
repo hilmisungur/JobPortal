@@ -7,36 +7,53 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'company') {
     exit();
 }
 
-$message = "";
-
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $title = trim($_POST['title']);
-    $description = trim($_POST['description']);
-    $location = trim($_POST['location']);
-    $type = $_POST['type'];
-
-    $postDate = date('Y-m-d H:i:s'); // Saatli tarih formatı
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $uid = $_SESSION['user_id'];
+    $title = $_POST['title'];
+    $description = $_POST['description'];
+    $il_id = $_POST['il_id'];
+    $ilce_id = $_POST['ilce_id'];
+    $job_type = $_POST['job_type'];
 
-    // Firma var mı kontrol et
-    $check = $conn->prepare("SELECT * FROM Company WHERE UID = ?");
-    $check->bind_param("i", $uid);
-    $check->execute();
-    $result = $check->get_result();
-
-    if ($result->num_rows > 0) {
-        // Firma varsa ilan ekle
-        $stmt = $conn->prepare("INSERT INTO Job (Title, Description, JLocation, JobType, PostDate, UID) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("sssssi", $title, $description, $location, $type, $postDate, $uid);
-
-        if ($stmt->execute()) {
-            $message = "Job posted successfully!";
-        } else {
-            $message = "Error posting job.";
-        }
-    } else {
-        $message = "Company account not found.";
+    // İl ve ilçe adlarını al
+    $ilName = '';
+    $ilceName = '';
+    $ilQuery = $conn->query("SELECT ad FROM il WHERE id = $il_id");
+    if ($ilQuery && $ilQuery->num_rows > 0) {
+        $ilName = $ilQuery->fetch_assoc()['ad'];
     }
+
+    $ilceQuery = $conn->query("SELECT ad FROM ilce WHERE id = $ilce_id");
+    if ($ilceQuery && $ilceQuery->num_rows > 0) {
+        $ilceName = $ilceQuery->fetch_assoc()['ad'];
+    }
+
+    $location = $ilceName . ' • ' . $ilName;
+
+    // ✅ Şirket daha önce eklenmemişse otomatik oluştur
+    $companyCheck = $conn->prepare("SELECT UID FROM company WHERE UID = ?");
+    $companyCheck->bind_param("i", $uid);
+    $companyCheck->execute();
+    $companyResult = $companyCheck->get_result();
+
+    if ($companyResult->num_rows === 0) {
+        $insertCompany = $conn->prepare("INSERT INTO company (UID, Location, LogoURL) VALUES (?, ?, ?)");
+        $defaultLogo = "images/default_logo.png";
+        $insertCompany->bind_param("iss", $uid, $location, $defaultLogo);
+        $insertCompany->execute();
+        $insertCompany->close();
+    }
+    $companyCheck->close();
+
+    // İş ilanını ekle
+    $stmt = $conn->prepare("INSERT INTO Job (UID, Title, Description, JLocation, JobType, PostDate, il_id, ilce_id)
+                            VALUES (?, ?, ?, ?, ?, NOW(), ?, ?)");
+    $stmt->bind_param("issssii", $uid, $title, $description, $location, $job_type, $il_id, $ilce_id);
+    $stmt->execute();
+    $stmt->close();
+
+    header("Location: manage_jobs.php");
+    exit();
 }
 ?>
 
@@ -46,41 +63,52 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <meta charset="UTF-8">
     <title>Add Job</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
 </head>
 <body class="bg-light">
 
 <div class="container mt-5">
-    <div class="card shadow">
+    <div class="card shadow-sm">
         <div class="card-body">
             <h3 class="card-title mb-4">Add a New Job</h3>
-
-            <?php if ($message): ?>
-                <div class="alert alert-info"><?= $message ?></div>
-            <?php endif; ?>
-
-            <form method="POST" action="">
+            <form method="POST">
                 <div class="mb-3">
-                    <label for="title" class="form-label">Job Title</label>
-                    <input type="text" class="form-control" name="title" required>
+                    <label class="form-label">Job Title</label>
+                    <input type="text" name="title" class="form-control" required>
                 </div>
 
                 <div class="mb-3">
-                    <label for="description" class="form-label">Job Description</label>
-                    <textarea class="form-control" name="description" rows="4" required></textarea>
+                    <label class="form-label">Job Description</label>
+                    <textarea name="description" class="form-control" rows="4" required></textarea>
                 </div>
 
                 <div class="mb-3">
-                    <label for="location" class="form-label">Location</label>
-                    <input type="text" class="form-control" name="location" required>
+                    <label class="form-label">City (İl)</label>
+                    <select id="il" name="il_id" class="form-select" required>
+                        <option value="">Select City</option>
+                        <?php
+                        $ilQuery = $conn->query("SELECT * FROM il ORDER BY ad");
+                        while ($il = $ilQuery->fetch_assoc()) {
+                            echo "<option value='{$il['id']}'>{$il['ad']}</option>";
+                        }
+                        ?>
+                    </select>
                 </div>
 
                 <div class="mb-3">
-                    <label for="type" class="form-label">Job Type</label>
-                    <select class="form-select" name="type" required>
+                    <label class="form-label">District (İlçe)</label>
+                    <select id="ilce" name="ilce_id" class="form-select" required>
+                        <option value="">Select District</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Job Type</label>
+                    <select name="job_type" class="form-select" required>
                         <option value="Full-Time">Full-Time</option>
-                        <option value="Part-Time">Part-Time</option>
-                        <option value="Remote">Remote</option>
+                        <option value="Part-time">Part-time</option>
                         <option value="Internship">Internship</option>
+                        <option value="Remote">Remote</option>
                     </select>
                 </div>
 
@@ -89,6 +117,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         </div>
     </div>
 </div>
+
+<script>
+    $('#il').on('change', function () {
+        const il_id = $(this).val();
+        $('#ilce').html('<option>Loading...</option>');
+
+        $.post('../includes/load_districts.php', { city_ids: [il_id] }, function (data) {
+            const districts = JSON.parse(data);
+            $('#ilce').html('<option value="">Select District</option>');
+            for (let i in districts) {
+                $('#ilce').append(`<option value="${districts[i].id}">${districts[i].name}</option>`);
+            }
+        });
+    });
+</script>
 
 </body>
 </html>
