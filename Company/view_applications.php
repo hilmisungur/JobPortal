@@ -8,16 +8,29 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'company') {
 require '../includes/db_connect.php';
 
 $companyID = $_SESSION['user_id'];
+$jobTitleFilter = isset($_GET['jobtitle']) ? trim($_GET['jobtitle']) : '';
 
-$stmt = $conn->prepare("
+// Filtreli sorgu
+$sql = "
     SELECT a.ApplyDate, u.FName, u.LName, u.Email, j.Title AS JobTitle
     FROM Application a
     JOIN Job j ON a.JID = j.JID
     JOIN User u ON a.UID = u.UID
     WHERE j.UID = ?
-    ORDER BY a.ApplyDate DESC
-");
-$stmt->bind_param("i", $companyID);
+";
+if ($jobTitleFilter !== '') {
+    $sql .= " AND j.Title LIKE ?";
+}
+$sql .= " ORDER BY a.ApplyDate DESC";
+
+$stmt = $conn->prepare($sql);
+
+if ($jobTitleFilter !== '') {
+    $likeTitle = '%' . $jobTitleFilter . '%';
+    $stmt->bind_param("is", $companyID, $likeTitle);
+} else {
+    $stmt->bind_param("i", $companyID);
+}
 $stmt->execute();
 $result = $stmt->get_result();
 ?>
@@ -37,6 +50,21 @@ $result = $stmt->get_result();
     <div class="mb-3 text-center">
         <a href="manage_jobs.php" class="btn btn-outline-secondary">← Back to Job Management</a>
     </div>
+
+    <!-- Job Title Arama/Filtre Formu -->
+    <form method="get" class="row mb-4 justify-content-center">
+        <div class="col-md-4">
+            <input type="text" name="jobtitle" class="form-control" placeholder="Search by Job Title..." value="<?= htmlspecialchars($jobTitleFilter) ?>">
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100">Filter</button>
+        </div>
+        <?php if ($jobTitleFilter !== ''): ?>
+            <div class="col-md-2">
+                <a href="view_applications.php" class="btn btn-outline-secondary w-100">Reset</a>
+            </div>
+        <?php endif; ?>
+    </form>
 
     <?php if ($result->num_rows > 0): ?>
         <table class="table table-bordered table-striped">
@@ -60,9 +88,8 @@ $result = $stmt->get_result();
             </tbody>
         </table>
     <?php else: ?>
-        <div class="alert alert-info text-center">No applications have been submitted yet.</div>
+        <div class="alert alert-info text-center">No applications found<?= $jobTitleFilter ? " for job title \"$jobTitleFilter\"" : "" ?>.</div>
     <?php endif; ?>
-
 </div>
 </body>
 </html>
