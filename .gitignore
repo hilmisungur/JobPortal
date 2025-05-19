@@ -1,0 +1,30 @@
+# Kişiye özel veritabanı bağlantı ayarı
+db_config.php
+
+# VS Code editör ayarları
+.vscode/
+
+# Windows sistem dosyaları
+Thumbs.db
+Desktop.ini
+
+# Mac sistem dosyaları
+.DS_Store
+
+# Geçici / yedek / log dosyaları
+*.log
+*.tmp
+*.bak
+*.swp
+
+# Önbellek klasörleri
+cache/
+tmp/
+temp/
+
+# Zip ve arşivler
+*.zip
+*.rar
+
+# Ortam dosyaları
+.env
